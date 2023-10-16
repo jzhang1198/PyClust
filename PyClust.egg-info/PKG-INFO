@@ -1,0 +1,11 @@
+Metadata-Version: 2.1
+Name: PyClust
+Version: 0.0.1
+Summary: Python package for remote server job management.
+Home-page: https://github.com/jzhang1198/PyClust
+Author: Jonathan Zhang
+Author-email: jon.zhang@ucsf.edu
+Classifier: Programming Language :: Python :: 3.9.12
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+License-File: LICENSE
