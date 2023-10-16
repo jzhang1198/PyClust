@@ -1,8 +1,0 @@
-LICENSE
-setup.py
-PyClust/__init__.py
-PyClust.egg-info/PKG-INFO
-PyClust.egg-info/SOURCES.txt
-PyClust.egg-info/dependency_links.txt
-PyClust.egg-info/requires.txt
-PyClust.egg-info/top_level.txt
