@@ -16,7 +16,7 @@ One of the neat features of this package is that it enables submission of jobs d
 }
 ```
 
-Note that you will need to set up passwordless SSH in order to obtain an SSH key. The Wynton documentation has some helpful resources on this. Now, you should be able to connect to the remote server within a local Python runtime running:
+Note that you will need to set up passwordless SSH in order to obtain an SSH key. The [Wynton documentation](https://wynton.ucsf.edu/hpc/howto/log-in-without-pwd.html) has some helpful resources on this. Now, you should be able to connect to the remote server within a local Python runtime running:
 
 ```python
 ssh_client = SSHClient(cluster_id = 'wynton')
