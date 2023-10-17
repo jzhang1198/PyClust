@@ -18,6 +18,7 @@ test.ipynb
 PyClust.egg-info/
 build/
 test/
+config.json
 
 # Sensitive or high-churn files
 .idea/**/dataSources/
