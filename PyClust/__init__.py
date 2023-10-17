@@ -1,4 +1,3 @@
-from datetime import datetime
 import paramiko
 import json
 import os
@@ -13,40 +12,6 @@ def realpath(path: str, ssh_client):
     sftp = ssh_client._ssh_client.open_sftp()
     isreal = True if sftp.stat(path).st_mode & 0o100000 or sftp.stat(path).st_mode & 0o040000 else False
     return isreal
-
-def generate_qsub_command(
-        outpath: str,
-        job_name: str,
-        job_script: str,
-        conda_env_name: str,
-        script_arguments: str = '',
-        n_jobs: int = 1,
-        time_allocation: str = '02:00:00',
-        memory_allocation: float = 3,
-        hardware_requirement: str = None,
-):
-    
-    # specify job requirements and allocations
-    qsub_command = ' '.join([
-        'qsub',
-        '-cwd',
-        '-N {}'.format(job_name),
-        '-t 1-{0}'.format(n_jobs),
-        '-l h_rt={0}'.format(time_allocation),
-        '-l mem_free={}G'.foramt(memory_allocation),
-        '-o {}'.format(outpath),
-        '-e {}'.format(outpath)
-    ])
-
-    if hardware_requirement:
-        qsub_command += '-l arch={}'.format(hardware_requirement)
-    
-    # in-line script to execute environment activation and job script
-    qsub_command += '\n'.join([
-        "<<'END'",
-        '#!/bin/bash',
-        'conda activate {} && ./{} {}'.format(conda_env_name, job_script, script_arguments),
-    ])
 
 class SSHClient:
     """ 
@@ -123,8 +88,10 @@ class SGEJob:
             outpath: str, 
             conda_env_name: str,
             job_name: str = 'sgejob',
+            n_jobs: int = 1,
             time_allocation: str = '02:00:00',
-            memory_allocation: float = 3
+            memory_allocation: float = 3,
+            hardware_requirements: list = [],
             ):
         """ 
         Constructor for SGEJob object.
@@ -140,36 +107,44 @@ class SGEJob:
         self.outpath = outpath
         self.conda_env_name = conda_env_name
         self.job_name = job_name
-        self.n_jobs = 1
+        self.n_jobs = n_jobs
         self.time_allocation = time_allocation
         self.memory_allocation = memory_allocation
+        self.hardware_requirements = hardware_requirements
 
         # set internal attributes
         self.job_id = None
         self.script = None
 
-    def _generate_qsub_command(self, script_path: str):
+    def _generate_qsub_command(
+            self,
+            job_script: str,
+            scrpit_args: str,
+    ):
+        
+        # specify job requirements and allocations
         qsub_command = ' '.join([
             'qsub',
-            '-wd',
-            self.scratchspace_subdir,
-            '-N', 
-            self.job_name,
-            '-t', 
-            '1-{0}'.format(self.n_jobs),
-            '-l', 
-            'h_rt={0}'.format(self.time_allocation),
-            '-o',
-            self.scratchspace_subdir,
-            '-e',
-            self.scratchspace_subdir
-                    ]) 
+            '-cwd',
+            '-N {}'.format(self.job_name),
+            '-t 1-{0}'.format(self.n_jobs),
+            '-l h_rt={0}'.format(self.time_allocation),
+            '-l mem_free={}G'.foramt(self.memory_allocation),
+            '-o {}'.format(self.outpath),
+            '-e {}'.format(self.outpath)
+        ])
+
+        if len(self.hardware_requirements) > 0:
+            qsub_command += '\n'.join(['-l arch={}'.format(req) for req in self.hardware_requirements])
         
-        qsub_command += "<<'END'\n#!/bin/bash\n#$ -wd {}\n#$ -S /bin/bash\nconda activate {} && {}\nEND".format(self.scratchspace_subdir, self.conda_env_name, script_path)
+        # in-line script to execute environment activation and job script
+        qsub_command += '\n'.join([
+            "<<'END'",
+            '#!/bin/bash',
+            'conda activate {} && ./{} {}'.format(self.conda_env_name, job_script, scrpit_args),
+        ])
 
-        return qsub_command
-
-    def submit_from_local(self, local_script: str, ssh_client: SSHClient):
+    def submit_from_local(self, local_script: str, ssh_client: SSHClient, script_args: str = ''):
         """ 
         Method for submitting SGE jobs from a local device.
 
@@ -193,7 +168,7 @@ class SGEJob:
         ssh_client.exec_command('chmod +x {}'.format(target))
         
         # generate and execute qsub command
-        qsub_command = self._generate_qsub_command(target)
+        qsub_command = self._generate_qsub_command(target, scrpit_args=script_args)
         _, stdout, stderr = ssh_client.exec_command(qsub_command)
         stdout, stderr = ''.join(stdout.readlines()), ''.join(stderr.readlines())
 
@@ -205,12 +180,6 @@ class SGEJob:
         elif len(stderr) > 0:
             print(stderr)
     
-    def submit():
-        """ 
-        Method for submitting SGE jobs from within the cluster.
-        """
-        pass
-
     def retrieve_output(self, ssh_client: SSHClient, target_dir: str = '.', retrieve_std: bool = False):
         """ 
         Method for retrieving program output.
@@ -228,3 +197,9 @@ class SGEJob:
 
         for output_file in output_files:
             ssh_client.remote_to_local_scp(os.path.join(self.outpath, output_file), os.path.join(target_dir, output_file))
+
+    def submit(self, script: str, script_args: str):
+        """ 
+        Method for submitting SGE jobs from within the cluster.
+        """
+        qsub_command = self._generate_qsub_command(script, scrpit_args=script_args)
