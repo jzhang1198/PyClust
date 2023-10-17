@@ -143,6 +143,7 @@ class SGEJob:
             "<<'END'",
             '#!/bin/bash',
             '#$ -wd {}'.format(self.outpath),
+            '#$ -S /bin/bash',
             'conda activate {} && {} {}'.format(self.conda_env_name, job_script, scrpit_args),
             'END'
         ])
