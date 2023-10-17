@@ -142,6 +142,7 @@ class SGEJob:
         qsub_command += '\n'.join([
             "<<'END'",
             '#!/bin/bash',
+            '#$ -wd {}'.format(self.outpath),
             'conda activate {} && {} {}'.format(self.conda_env_name, job_script, scrpit_args),
             'END'
         ])
