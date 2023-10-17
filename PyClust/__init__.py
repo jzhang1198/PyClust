@@ -89,7 +89,7 @@ class SGEJob:
             outpath: str, 
             conda_env_name: str,
             job_name: str = 'sgejob',
-            n_jobs: int = 1,
+            n_tasks: int = 1,
             time_allocation: str = '02:00:00',
             memory_allocation: float = 3,
             hardware_requirements: list = [],
@@ -108,7 +108,7 @@ class SGEJob:
         self.outpath = outpath
         self.conda_env_name = conda_env_name
         self.job_name = job_name
-        self.n_jobs = n_jobs
+        self.n_tasks = n_tasks
         self.time_allocation = time_allocation
         self.memory_allocation = memory_allocation
         self.hardware_requirements = hardware_requirements
@@ -128,7 +128,7 @@ class SGEJob:
             'qsub',
             '-cwd',
             '-N {}'.format(self.job_name),
-            '-t 1-{0}'.format(self.n_jobs),
+            '-t 1-{0}'.format(self.n_tasks),
             '-l h_rt={0}'.format(self.time_allocation),
             '-l mem_free={}G'.format(self.memory_allocation),
             '-o {}'.format(self.outpath),
@@ -136,7 +136,7 @@ class SGEJob:
         ])
 
         if len(self.hardware_requirements) > 0:
-            qsub_command += '\n'.join(['-l {}'.format(req) for req in self.hardware_requirements])
+            qsub_command += ' ' + ' '.join(['-l {}'.format(req) for req in self.hardware_requirements])
         
         # in-line script to execute environment activation and job script
         qsub_command += '\n'.join([
