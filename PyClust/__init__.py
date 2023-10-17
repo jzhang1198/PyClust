@@ -14,7 +14,46 @@ def realpath(path: str, ssh_client):
     isreal = True if sftp.stat(path).st_mode & 0o100000 or sftp.stat(path).st_mode & 0o040000 else False
     return isreal
 
+def generate_qsub_command(
+        outpath: str,
+        job_name: str,
+        job_script: str,
+        conda_env_name: str,
+        script_arguments: str = '',
+        n_jobs: int = 1,
+        time_allocation: str = '02:00:00',
+        memory_allocation: float = 3,
+        hardware_requirement: str = None,
+):
+    
+    # specify job requirements and allocations
+    qsub_command = ' '.join([
+        'qsub',
+        '-cwd',
+        '-N {}'.format(job_name),
+        '-t 1-{0}'.format(n_jobs),
+        '-l h_rt={0}'.format(time_allocation),
+        '-l mem_free={}G'.foramt(memory_allocation),
+        '-o {}'.format(outpath),
+        '-e {}'.format(outpath)
+    ])
+
+    if hardware_requirement:
+        qsub_command += '-l arch={}'.format(hardware_requirement)
+    
+    # in-line script to execute environment activation and job script
+    qsub_command += '\n'.join([
+        "<<'END'",
+        '#!/bin/bash',
+        'conda activate {} && ./{} {}'.format(conda_env_name, job_script, script_arguments),
+    ])
+
 class SSHClient:
+    """ 
+    Class for establishing SSH connection with a remote server from Python
+    runtime environment (i.e. a locally-hosted script or notebook).
+    """
+
     def __init__(
               self, 
               cluster_id: str
@@ -81,7 +120,7 @@ class SSHClient:
 class SGEJob:
     def __init__(
             self, 
-            scratchspace: str, 
+            outpath: str, 
             conda_env_name: str,
             job_name: str = 'sgejob',
             time_allocation: str = '02:00:00',
@@ -98,17 +137,12 @@ class SGEJob:
         memory_allocation (float, optional): Memory allocation (in GB).
         """
 
-        self.scratchspace = scratchspace
+        self.outpath = outpath
         self.conda_env_name = conda_env_name
         self.job_name = job_name
         self.n_jobs = 1
         self.time_allocation = time_allocation
         self.memory_allocation = memory_allocation
-
-        # make a subdir to hold stderr and stdout
-        date = datetime.now()
-        dirname = f'{date.year}-{date.month}-{date.day}_{date.hour}-{date.minute}-{date.second}'
-        self.scratchspace_subdir = os.path.join(self.scratchspace, dirname)
 
         # set internal attributes
         self.job_id = None
@@ -145,19 +179,16 @@ class SGEJob:
             needs to be called beforehand to establish remote connection.
         """
 
-        if not realpath(self.scratchspace, ssh_client):
-            print(f'{self.scratchspace} does not exist on {ssh_client.username}@{ssh_client.hostname}.')
+        if not realpath(self.outpath, ssh_client):
+            print(f'{self.outpath} does not exist on {ssh_client.username}@{ssh_client.hostname}.')
             return
 
         if self.job_id:
             print(f'{self.job_id} is still running.')
             return
-        
-        # within the scratchspace, create a unique dir to store stdout and stderr
-        ssh_client.exec_command(f'mkdir {self.scratchspace_subdir}')
 
         # transfer local script to Wynton via scp and make it executable
-        target = os.path.join(self.scratchspace_subdir, local_script.split('/')[-1])
+        target = os.path.join(self.outpath, local_script.split('/')[-1])
         ssh_client.local_to_remote_scp(local_script, target)
         ssh_client.exec_command('chmod +x {}'.format(target))
         
@@ -192,8 +223,8 @@ class SGEJob:
         stderr_file, stdout_file, script_file = '{}.e{}?'.format(self.job_name, self.job_id), '{}.o{}?'.format(self.job_name, self.job_id), self.script.split('/')[-1]
         excluded_files = {stderr_file, stdout_file, script_file} if not retrieve_std else {script_file}
 
-        _, stdout, _ = ssh_client.exec_command(f'ls {self.scratchspace_subdir}')
+        _, stdout, _ = ssh_client.exec_command(f'ls {self.outpath}')
         output_files = [item.rstrip('\n') for item in stdout.readlines() if item.rstrip('\n') not in excluded_files]
 
         for output_file in output_files:
-            ssh_client.remote_to_local_scp(os.path.join(self.scratchspace_subdir, output_file), os.path.join(target_dir, output_file))
+            ssh_client.remote_to_local_scp(os.path.join(self.outpath, output_file), os.path.join(target_dir, output_file))
