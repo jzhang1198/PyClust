@@ -1,3 +1,4 @@
+import subprocess
 import paramiko
 import json
 import os
@@ -129,20 +130,23 @@ class SGEJob:
             '-N {}'.format(self.job_name),
             '-t 1-{0}'.format(self.n_jobs),
             '-l h_rt={0}'.format(self.time_allocation),
-            '-l mem_free={}G'.foramt(self.memory_allocation),
+            '-l mem_free={}G'.format(self.memory_allocation),
             '-o {}'.format(self.outpath),
             '-e {}'.format(self.outpath)
         ])
 
         if len(self.hardware_requirements) > 0:
-            qsub_command += '\n'.join(['-l arch={}'.format(req) for req in self.hardware_requirements])
+            qsub_command += '\n'.join(['-l {}'.format(req) for req in self.hardware_requirements])
         
         # in-line script to execute environment activation and job script
         qsub_command += '\n'.join([
             "<<'END'",
             '#!/bin/bash',
-            'conda activate {} && ./{} {}'.format(self.conda_env_name, job_script, scrpit_args),
+            'conda activate {} && {} {}'.format(self.conda_env_name, job_script, scrpit_args),
+            'END'
         ])
+
+        return qsub_command
 
     def submit_from_local(self, local_script: str, ssh_client: SSHClient, script_args: str = ''):
         """ 
@@ -203,3 +207,7 @@ class SGEJob:
         Method for submitting SGE jobs from within the cluster.
         """
         qsub_command = self._generate_qsub_command(script, scrpit_args=script_args)
+        try:
+            subprocess.run(qsub_command, shell=True, check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Error executing qsub command:\n{qsub_command}")
